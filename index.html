@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>おえかき あつめ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#2c2c40;
+    --paper:#ffffff;
+    --bg:#f3eee4;
+    --blue:#5b7cfa;
+    --coral:#ff8a5b;
+    --green:#2bb673;
+    --line:#e3dccf;
+    --shadow:0 6px 0 rgba(0,0,0,.10);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    font-family:'Zen Maru Gothic','Hiragino Maru Gothic ProN','Rounded Mplus 1c',sans-serif;
+    color:var(--ink);background:var(--bg);
+    overflow:hidden;
+  }
+  .screen{display:none;height:100vh;width:100vw;flex-direction:column;}
+  .screen.active{display:flex;}
+
+  /* ---- 共通ボタン ---- */
+  .btn{
+    font-family:inherit;font-weight:700;border:none;border-radius:18px;
+    padding:16px 22px;font-size:20px;color:#fff;cursor:pointer;
+    box-shadow:var(--shadow);transition:transform .06s;
+  }
+  .btn:active{transform:translateY(3px);box-shadow:0 3px 0 rgba(0,0,0,.10);}
+  .btn-blue{background:var(--blue);}
+  .btn-coral{background:var(--coral);}
+  .btn-green{background:var(--green);}
+  .btn-ghost{background:#fff;color:var(--ink);box-shadow:0 4px 0 var(--line);}
+  .btn:disabled{opacity:.45;cursor:default;}
+
+  /* ---- 入口 ---- */
+  #entry{align-items:center;justify-content:center;gap:22px;padding:24px;text-align:center;}
+  #entry h1{font-size:clamp(30px,7vw,52px);margin:0;letter-spacing:.04em;}
+  #entry .sub{color:#8a8270;margin-top:-10px;font-size:16px;}
+  .field{display:flex;flex-direction:column;gap:6px;align-items:flex-start;width:min(420px,86vw);}
+  .field label{font-size:15px;color:#7a7363;padding-left:4px;}
+  .field input{
+    font-family:inherit;font-size:22px;padding:14px 16px;border-radius:14px;
+    border:3px solid var(--line);width:100%;background:#fff;color:var(--ink);
+  }
+  .field input:focus{outline:none;border-color:var(--blue);}
+  .role-row{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;width:min(420px,86vw);}
+  .role-row .btn{flex:1;min-width:150px;font-size:24px;padding:22px;}
+  .warn{background:#fff3cd;border:2px solid #ffd666;color:#7a5a00;
+    padding:14px 16px;border-radius:14px;max-width:min(560px,90vw);font-size:15px;line-height:1.6;}
+
+  /* ---- ヘッダー ---- */
+  .topbar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fff;border-bottom:3px solid var(--line);flex-wrap:wrap;}
+  .topbar .who{font-weight:700;font-size:18px;}
+  .topbar .room{background:#eef1ff;color:var(--blue);padding:4px 12px;border-radius:999px;font-size:14px;font-weight:700;}
+  .dot{width:11px;height:11px;border-radius:50%;background:#c9c2b4;}
+  .dot.on{background:var(--green);}
+  .spacer{flex:1;}
+  .mini-btn{font-family:inherit;font-weight:700;border:none;background:#f0ece2;color:var(--ink);
+    padding:8px 14px;border-radius:12px;font-size:15px;cursor:pointer;}
+
+  /* ---- 生徒：お絵かき ---- */
+  #student .stage{flex:1;display:flex;align-items:center;justify-content:center;padding:8px;min-height:0;}
+  .canvas-wrap{position:relative;background:var(--paper);border-radius:14px;overflow:hidden;
+    box-shadow:0 4px 16px rgba(0,0,0,.10);aspect-ratio:4/3;max-width:100%;max-height:100%;}
+  #photoLayer{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:.35;pointer-events:none;display:none;z-index:1;}
+  #drawCanvas{position:absolute;inset:0;width:100%;height:100%;border-radius:14px;touch-action:none;display:block;z-index:2;}
+
+  .toolbar{background:#fff;border-top:3px solid var(--line);padding:8px 12px 6px;display:flex;flex-direction:column;gap:8px;}
+  .tool-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;}
+  .grp-label{font-size:13px;font-weight:700;color:#9a9281;background:#f5f1e8;padding:4px 10px;border-radius:999px;white-space:nowrap;}
+  .swatches{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+  .swatch{width:36px;height:36px;border-radius:50%;border:4px solid #fff;box-shadow:0 0 0 2px var(--line);cursor:pointer;}
+  .swatch.sel{box-shadow:0 0 0 4px var(--ink);transform:scale(1.08);}
+  .sizes{display:flex;gap:8px;align-items:center;}
+  .size-dot{width:40px;height:40px;border-radius:12px;background:#f0ece2;display:flex;align-items:center;justify-content:center;cursor:pointer;border:3px solid transparent;}
+  .size-dot.sel{border-color:var(--ink);background:#fff;}
+  .size-dot i{display:block;border-radius:50%;background:var(--ink);}
+  .brush-group,.tool-group{display:flex;gap:8px;}
+  .ico-btn{font-family:inherit;font-weight:700;border:none;border-radius:12px;background:#f0ece2;color:var(--ink);
+    padding:8px 12px;font-size:14px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:58px;}
+  .ico-btn.sel{background:#ffe8de;border:3px solid var(--coral);}
+  .ico-btn .em{font-size:19px;}
+  .photo-panel{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;background:#faf6ee;border:2px solid var(--line);border-radius:14px;padding:10px;margin-top:2px;}
+  #photoUrl{font-family:inherit;font-size:14px;padding:8px 10px;border-radius:10px;border:2px solid var(--line);min-width:170px;}
+  .opacity-label{font-size:14px;font-weight:700;color:#7a7363;display:flex;align-items:center;gap:6px;}
+  .photo-panel input[type=range]{width:120px;}
+  .submit-bar{display:flex;justify-content:center;padding:8px;background:#fff;}
+  .submit-bar .btn{font-size:22px;padding:14px 40px;}
+
+  /* ---- 提出できたよ ---- */
+  .toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);
+    background:var(--green);color:#fff;font-weight:700;font-size:20px;
+    padding:14px 28px;border-radius:999px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:opacity .25s, transform .25s;}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-6px);}
+
+  /* ---- 先生 ---- */
+  .tabs{display:flex;gap:8px;padding:10px 14px;background:#fff;border-bottom:3px solid var(--line);}
+  .tab{font-family:inherit;font-weight:700;border:none;background:#f0ece2;color:var(--ink);
+    padding:10px 20px;border-radius:12px;font-size:17px;cursor:pointer;}
+  .tab.sel{background:var(--blue);color:#fff;}
+  .grid{flex:1;overflow:auto;padding:14px;display:grid;gap:14px;
+    grid-template-columns:repeat(auto-fill,minmax(220px,1fr));align-content:start;}
+  .tile{background:#fff;border-radius:14px;box-shadow:0 3px 10px rgba(0,0,0,.08);overflow:hidden;position:relative;}
+  .tile .name{padding:8px 12px;font-weight:700;font-size:15px;display:flex;align-items:center;gap:6px;}
+  .tile canvas,.tile img{width:100%;aspect-ratio:4/3;display:block;background:#fff;object-fit:contain;}
+  .badge{position:absolute;top:8px;right:8px;background:var(--green);color:#fff;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;}
+  .empty{flex:1;display:flex;align-items:center;justify-content:center;color:#9a9281;font-size:18px;text-align:center;padding:30px;grid-column:1/-1;}
+  .gallery-tools{display:flex;gap:10px;align-items:center;padding:10px 14px;background:#faf6ee;border-bottom:2px solid var(--line);}
+  .count{font-weight:700;color:#7a7363;}
+
+  /* ---- 拡大モーダル ---- */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:20px;z-index:50;}
+  .modal.show{display:flex;}
+  .modal-card{background:#fff;border-radius:16px;padding:14px;max-width:92vw;max-height:92vh;display:flex;flex-direction:column;gap:10px;}
+  .modal-card img{max-width:88vw;max-height:74vh;border-radius:10px;}
+  .modal-row{display:flex;gap:10px;justify-content:space-between;align-items:center;}
+
+  /* ---- 削除ボタン（ギャラリー） ---- */
+  .tile .del{position:absolute;top:8px;right:8px;border:none;border-radius:10px;background:rgba(229,72,77,.92);color:#fff;font-size:13px;font-weight:700;padding:5px 10px;cursor:pointer;}
+
+  /* ---- 提示モード（みんなにみせる） ---- */
+  .present{position:fixed;inset:0;background:#1c1c24;display:none;flex-direction:column;z-index:60;}
+  .present.show{display:flex;}
+  .present-stage{flex:1;display:flex;align-items:center;justify-content:center;padding:20px;min-height:0;}
+  .present-stage img{max-width:96vw;max-height:80vh;background:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,.4);}
+  .present-bar{display:flex;align-items:center;justify-content:center;gap:20px;padding:16px;color:#fff;flex-wrap:wrap;}
+  .present-name{font-size:28px;font-weight:700;}
+  .present-count{font-size:18px;color:#b9b4c7;}
+  .present-nav{font-family:inherit;font-size:24px;font-weight:700;border:none;border-radius:14px;background:#3a3a4a;color:#fff;padding:12px 26px;cursor:pointer;}
+  .present-nav:active{transform:translateY(2px);}
+  .present-close{position:absolute;top:16px;right:16px;z-index:2;font-family:inherit;font-weight:700;border:none;border-radius:12px;background:#3a3a4a;color:#fff;padding:10px 16px;font-size:16px;cursor:pointer;}
+</style>
+</head>
+<body>
+
+<!-- ============ 入口 ============ -->
+<div id="entry" class="screen active">
+  <div>
+    <h1>🎨 おえかき あつめ</h1>
+    <div class="sub">みんなで かいて、せんせいが あつめる</div>
+  </div>
+  <div id="configWarn" class="warn" style="display:none"></div>
+  <div class="field">
+    <label>あいことば（クラスや はんの なまえ）</label>
+    <input id="roomInput" placeholder="れい：3ねん1くみ" autocomplete="off">
+  </div>
+  <div class="field" id="nameField">
+    <label>なまえ（せいと だけ）</label>
+    <input id="nameInput" placeholder="れい：たろう" autocomplete="off">
+  </div>
+  <div class="role-row">
+    <button class="btn btn-coral" id="goStudent">✏️ せいと</button>
+    <button class="btn btn-blue" id="goTeacher">👩‍🏫 せんせい</button>
+  </div>
+</div>
+
+<!-- ============ 生徒：お絵かき ============ -->
+<div id="student" class="screen">
+  <div class="topbar">
+    <button class="mini-btn" id="stuBack">‹ もどる</button>
+    <span class="who" id="stuName">なまえ</span>
+    <span class="room" id="stuRoom"></span>
+    <span class="spacer"></span>
+    <span class="dot" id="stuDot"></span>
+  </div>
+  <div class="stage">
+    <div class="canvas-wrap">
+      <img id="photoLayer" alt="">
+      <canvas id="drawCanvas"></canvas>
+    </div>
+  </div>
+  <div class="toolbar">
+    <div class="tool-row">
+      <span class="grp-label">いろ</span>
+      <div class="swatches" id="swatches"></div>
+    </div>
+    <div class="tool-row">
+      <span class="grp-label">ふで</span>
+      <div class="brush-group" id="brushGroup">
+        <button class="ico-btn sel" data-brush="pen"><span class="em">✏️</span>ペン</button>
+        <button class="ico-btn" data-brush="marker"><span class="em">🖊️</span>マーカー</button>
+        <button class="ico-btn" data-brush="spray"><span class="em">💨</span>スプレー</button>
+      </div>
+      <span class="grp-label">ふとさ</span>
+      <div class="sizes" id="sizes"></div>
+    </div>
+    <div class="tool-row">
+      <div class="tool-group">
+        <button class="ico-btn" id="fillBtn"><span class="em">🪣</span>ぬり</button>
+        <button class="ico-btn" id="eraserBtn"><span class="em">🧽</span>けしゴム</button>
+        <button class="ico-btn" id="undoBtn"><span class="em">↩️</span>もどす</button>
+        <button class="ico-btn" id="clearBtn"><span class="em">🗑️</span>ぜんぶ</button>
+      </div>
+      <button class="ico-btn" id="photoBtn"><span class="em">🖼️</span>したじき</button>
+    </div>
+    <div id="photoPanel" class="photo-panel" style="display:none">
+      <button class="mini-btn" id="photoFileBtn">📁 ファイルからえらぶ</button>
+      <input id="photoUrl" type="text" placeholder="がぞうのURLをはりつけ">
+      <button class="mini-btn" id="photoUrlBtn">URLからのせる</button>
+      <span class="opacity-label">うすさ <input type="range" id="photoOpacity" min="0" max="70" value="35"></span>
+      <button class="mini-btn" id="photoClearBtn">✖ したじきをけす</button>
+    </div>
+    <input type="file" id="photoFile" accept="image/*" style="display:none">
+  </div>
+  <div class="submit-bar">
+    <button class="btn btn-green" id="submitBtn">📨 ていしゅつ</button>
+  </div>
+</div>
+
+<!-- ============ 先生 ============ -->
+<div id="teacher" class="screen">
+  <div class="topbar">
+    <button class="mini-btn" id="teaBack">‹ もどる</button>
+    <span class="who">せんせい がめん</span>
+    <span class="room" id="teaRoom"></span>
+    <span class="spacer"></span>
+    <span class="dot" id="teaDot"></span>
+  </div>
+  <div class="tabs">
+    <button class="tab sel" id="tabLive">👀 ライブ</button>
+    <button class="tab" id="tabGallery">🖼️ ギャラリー</button>
+  </div>
+
+  <div id="liveView" style="flex:1;display:flex;flex-direction:column;min-height:0;">
+    <div id="liveGrid" class="grid"></div>
+  </div>
+
+  <div id="galleryView" style="flex:1;display:none;flex-direction:column;min-height:0;">
+    <div class="gallery-tools">
+      <span class="count" id="galCount">0まい</span>
+      <span class="spacer" style="flex:1"></span>
+      <button class="mini-btn" id="presentBtn">📺 みんなにみせる</button>
+      <button class="mini-btn" id="clearAllBtn">🗑️ ぜんぶけす</button>
+      <button class="mini-btn" id="reloadGal">🔄 さいよみこみ</button>
+    </div>
+    <div id="galleryGrid" class="grid"></div>
+  </div>
+</div>
+
+<!-- 拡大モーダル -->
+<div class="modal" id="modal">
+  <div class="modal-card">
+    <img id="modalImg" alt="">
+    <div class="modal-row">
+      <a class="mini-btn" id="modalDl" download>⬇️ ほぞん</a>
+      <button class="mini-btn" id="modalClose">とじる</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast">📨 ていしゅつ できたよ！</div>
+
+<!-- 提示（みんなにみせる）全画面 -->
+<div class="present" id="present">
+  <button class="present-close" id="presentClose">✖ とじる</button>
+  <div class="present-stage"><img id="presentImg" alt=""></div>
+  <div class="present-bar">
+    <button class="present-nav" id="presentPrev">◀</button>
+    <span class="present-name" id="presentName"></span>
+    <span class="present-count" id="presentCount"></span>
+    <button class="present-nav" id="presentNext">▶</button>
+  </div>
+</div>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+/* ===================================================================
+   ▼▼▼ ここを じぶんの Supabase の せってい に かきかえてね ▼▼▼
+   （Supabase → Project Settings → API でみつかります）
+=================================================================== */
+const SUPABASE_URL = 'https://glxszbwsvembyygocekp.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_9grsvrOlzxrzJqsKvqF1ow_u8SFQsII';
+/* ▲▲▲ かきかえるのは この2ぎょう だけ ▲▲▲ */
+
+const configReady = !SUPABASE_URL.includes('あなた') && !SUPABASE_KEY.includes('あなた');
+const supabase = configReady ? createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+
+if(!configReady){
+  const w = document.getElementById('configWarn');
+  w.style.display='block';
+  w.innerHTML='⚠️ まだ Supabase の せってい が はいっていません。<br>'+
+    'このファイルの <b>SUPABASE_URL</b> と <b>SUPABASE_KEY</b> を かきかえて ほぞんしてください。';
+}
+
+/* ---------- 端末ID・名前の記憶（この端末だけ） ---------- */
+function deviceId(){
+  let id = localStorage.getItem('oekaki_device');
+  if(!id){ id = (crypto.randomUUID ? crypto.randomUUID() : 'd'+Math.random().toString(36).slice(2)); localStorage.setItem('oekaki_device', id); }
+  return id;
+}
+const DEVICE = deviceId();
+
+/* ---------- 画面きりかえ ---------- */
+const screens = { entry:'entry', student:'student', teacher:'teacher' };
+function show(name){
+  Object.values(screens).forEach(id=>document.getElementById(id).classList.remove('active'));
+  document.getElementById(name).classList.add('active');
+}
+
+/* ---------- 入口の入力を覚える ---------- */
+const roomInput = document.getElementById('roomInput');
+const nameInput = document.getElementById('nameInput');
+roomInput.value = localStorage.getItem('oekaki_room') || '';
+nameInput.value = localStorage.getItem('oekaki_name') || '';
+
+let state = { room:'', name:'', channel:null, role:null };
+
+function joinChannel(room){
+  // 同じ「あいことば」の端末どうしが つながる部屋
+  const ch = supabase.channel('oekaki-'+room, { config:{ broadcast:{ self:false } } });
+  return ch;
+}
+
+/* =====================================================================
+   生徒：お絵かき
+===================================================================== */
+const canvas = document.getElementById('drawCanvas');
+const ctx = canvas.getContext('2d');
+let strokes = [];          // {color,sizeFrac,erase,pts:[{x,y}...]}（座標は0〜1のわりあい）
+let cur = null;            // 描いている途中のストローク
+let drawing = false;
+let penColor = '#000000';
+let sizeFrac = 0.013;      // 線の太さ＝キャンバス横幅にたいするわりあい
+let tool = 'pen';          // 'pen' | 'eraser' | 'fill'
+let brush = 'pen';         // 'pen' | 'marker' | 'spray'（ペン系のときの書き味）
+function mulberry32(a){ return function(){ a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+
+const PALETTE = ['#000000','#e5484d','#ff8a1e','#f5c518','#37b24d','#1c7ed6','#7048e8','#f06595','#8b5e34','#4dabf7'];
+const SIZES = [{f:0.003,d:6},{f:0.007,d:10},{f:0.013,d:16},{f:0.026,d:24},{f:0.045,d:34}];
+
+// 色パレット描画
+const swEl = document.getElementById('swatches');
+PALETTE.forEach((c,i)=>{
+  const s=document.createElement('div'); s.className='swatch'+(i===0?' sel':'');
+  s.style.background=c; swEl.appendChild(s);
+  s.onclick=()=>{ penColor=c; setTool('pen');
+    swEl.querySelectorAll('.swatch').forEach(x=>x.classList.remove('sel')); s.classList.add('sel'); };
+});
+// 太さ
+const szEl = document.getElementById('sizes');
+SIZES.forEach((s,i)=>{
+  const b=document.createElement('div'); b.className='size-dot'+(i===2?' sel':'');
+  const dot=document.createElement('i'); dot.style.width=s.d+'px'; dot.style.height=s.d+'px';
+  b.appendChild(dot); szEl.appendChild(b);
+  b.onclick=()=>{ sizeFrac=s.f; szEl.querySelectorAll('.size-dot').forEach(x=>x.classList.remove('sel')); b.classList.add('sel'); };
+});
+function setTool(t){
+  tool=t;
+  document.getElementById('fillBtn').classList.toggle('sel',t==='fill');
+  document.getElementById('eraserBtn').classList.toggle('sel',t==='eraser');
+  document.querySelectorAll('#brushGroup [data-brush]').forEach(b=>b.classList.toggle('sel', t==='pen' && b.dataset.brush===brush));
+}
+document.querySelectorAll('#brushGroup [data-brush]').forEach(btn=>{
+  btn.onclick=()=>{ brush=btn.dataset.brush; setTool('pen'); };
+});
+document.getElementById('fillBtn').onclick=()=>setTool(tool==='fill'?'pen':'fill');
+document.getElementById('eraserBtn').onclick=()=>setTool(tool==='eraser'?'pen':'eraser');
+document.getElementById('undoBtn').onclick=()=>{ strokes.pop(); redraw(); };
+document.getElementById('clearBtn').onclick=()=>{ strokes=[]; redraw(); sendClear(); };
+setTool('pen');
+
+// ---- したじき写真（なぞるための下じき。提出には入りません） ----
+const photoLayer=document.getElementById('photoLayer');
+const photoPanel=document.getElementById('photoPanel');
+const photoFile=document.getElementById('photoFile');
+const photoOpacity=document.getElementById('photoOpacity');
+document.getElementById('photoBtn').onclick=()=>{ photoPanel.style.display = (photoPanel.style.display==='none'?'flex':'none'); };
+document.getElementById('photoFileBtn').onclick=()=>photoFile.click();
+photoFile.onchange=e=>{ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>setPhoto(r.result); r.readAsDataURL(f); };
+document.getElementById('photoUrlBtn').onclick=()=>{ const u=document.getElementById('photoUrl').value.trim(); if(u)setPhoto(u); };
+document.getElementById('photoClearBtn').onclick=()=>{ photoLayer.removeAttribute('src'); photoLayer.style.display='none'; };
+photoOpacity.oninput=function(){ photoLayer.style.opacity=this.value/100; };
+function setPhoto(src){
+  photoLayer.onerror=()=>{ photoLayer.style.display='none'; alert('このがぞうは よみこめませんでした。\nべつのがぞうか、「ファイルからえらぶ」で ためしてください。'); };
+  photoLayer.style.opacity=photoOpacity.value/100;
+  photoLayer.src=src; photoLayer.style.display='block';
+}
+
+// キャンバスの実ピクセル設定（くっきり表示）
+function fitCanvas(){
+  const r = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio||1;
+  canvas.width = Math.round(r.width*dpr);
+  canvas.height = Math.round(r.height*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  redraw();
+}
+function cssSize(){ const r=canvas.getBoundingClientRect(); return {w:r.width,h:r.height}; }
+
+// 描画エリアを、残りスペースに合わせて4:3でぴったり収める（ツールに重ならないように）
+function layoutCanvas(){
+  const stage=document.querySelector('#student .stage');
+  if(!stage)return;
+  const availW=stage.clientWidth-16, availH=stage.clientHeight-16;
+  if(availW<=0||availH<=0)return;
+  let w=availW, h=w*3/4;
+  if(h>availH){ h=availH; w=h*4/3; }
+  const wrap=document.querySelector('.canvas-wrap');
+  wrap.style.width=Math.max(40,Math.floor(w))+'px';
+  wrap.style.height=Math.max(30,Math.floor(h))+'px';
+  fitCanvas();
+}
+
+// わりあい座標 → 画面ピクセル（ペン・マーカー・スプレー・消しゴム）
+function sprayStamp(c, w, h, st, p, idx){
+  c.fillStyle=st.color;
+  const r=st.sizeFrac*w*2.2;                      // ちらばる はんい
+  const dots=Math.max(8, Math.round(st.sizeFrac*w*1.3));
+  const rng=mulberry32(((st.seed||1)+idx*9973)>>>0);
+  for(let k=0;k<dots;k++){
+    const ang=rng()*6.283185, rad=Math.sqrt(rng())*r;
+    const x=p.x*w+Math.cos(ang)*rad, y=p.y*h+Math.sin(ang)*rad;
+    c.globalAlpha=0.35+rng()*0.5;
+    c.beginPath(); c.arc(x,y,Math.max(0.7,r*0.07),0,6.283185); c.fill();
+  }
+  c.globalAlpha=1;
+}
+function drawStrokeOn(c, w, h, st, transparentBg){
+  c.save(); c.lineCap='round'; c.lineJoin='round';
+  if(st.erase){
+    if(transparentBg){ c.globalCompositeOperation='destination-out'; c.strokeStyle='rgba(0,0,0,1)'; }
+    else { c.strokeStyle='#ffffff'; }
+    c.lineWidth=st.sizeFrac*w;
+    c.beginPath(); st.pts.forEach((p,i)=>{const x=p.x*w,y=p.y*h; i?c.lineTo(x,y):c.moveTo(x,y);});
+    if(st.pts.length===1){const p=st.pts[0]; c.lineTo(p.x*w+0.1,p.y*h+0.1);}
+    c.stroke(); c.restore(); return;
+  }
+  if(st.brush==='spray'){
+    st.pts.forEach((p,i)=>sprayStamp(c,w,h,st,p,i));
+    c.restore(); return;
+  }
+  if(st.brush==='marker'){ c.globalAlpha=0.4; c.lineWidth=st.sizeFrac*w*1.6; }
+  else { c.lineWidth=st.sizeFrac*w; }
+  c.strokeStyle=st.color;
+  c.beginPath(); st.pts.forEach((p,i)=>{const x=p.x*w,y=p.y*h; i?c.lineTo(x,y):c.moveTo(x,y);});
+  if(st.pts.length===1){const p=st.pts[0]; c.lineTo(p.x*w+0.1,p.y*h+0.1);}
+  c.stroke(); c.restore();
+}
+
+// 塗りつぶし（バケツ）：押した点とつながった同じ色を、選んだ色でぬる
+function hexToRgb(hex){ hex=hex.replace('#',''); if(hex.length===3)hex=hex.split('').map(c=>c+c).join('');
+  const n=parseInt(hex,16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+function floodFill(c, W, H, sx, sy, hex){
+  sx=Math.round(sx); sy=Math.round(sy);
+  if(sx<0||sy<0||sx>=W||sy>=H)return;
+  const img=c.getImageData(0,0,W,H);
+  const data=new Uint32Array(img.data.buffer);
+  const start=sy*W+sx;
+  const target=data[start];
+  const [fr,fg,fb]=hexToRgb(hex);
+  const fill=(((255<<24)|(fb<<16)|(fg<<8)|fr)>>>0);     // ABGR (little-endian, unsigned)
+  if(target===fill)return;
+  const tr=target&255, tg=(target>>8)&255, tb=(target>>16)&255, ta=(target>>24)&255;
+  const tol2=40*40;
+  const near=p=>{ const r=p&255,g=(p>>8)&255,b=(p>>16)&255,a=(p>>24)&255;
+    const dr=r-tr,dg=g-tg,db=b-tb,da=a-ta; return dr*dr+dg*dg+db*db+da*da<=tol2; };
+  const seen=new Uint8Array(W*H);    // BFSで見た
+  const filled=new Uint8Array(W*H);  // 実際に塗った
+  const stack=[start];
+  while(stack.length){
+    const p=stack.pop();
+    if(seen[p])continue; seen[p]=1;
+    if(!near(data[p]))continue;
+    data[p]=fill; filled[p]=1;
+    const x=p%W;
+    if(x>0)stack.push(p-1);
+    if(x<W-1)stack.push(p+1);
+    if(p-W>=0)stack.push(p-W);
+    if(p+W<W*H)stack.push(p+W);
+  }
+  // 線のフチ（ぼかし＝半透明部分）まで数px広げて、白いふちを消す。
+  // 不透明な線の中心（alpha≥250）では止まるので、はみ出しません。
+  let frontier=[];
+  for(let p=0;p<W*H;p++){
+    if(!filled[p])continue;
+    const x=p%W;
+    if(x>0   && !filled[p-1] && ((data[p-1]>>>24)&255)<250) frontier.push(p-1);
+    if(x<W-1 && !filled[p+1] && ((data[p+1]>>>24)&255)<250) frontier.push(p+1);
+    if(p>=W  && !filled[p-W] && ((data[p-W]>>>24)&255)<250) frontier.push(p-W);
+    if(p+W<W*H && !filled[p+W] && ((data[p+W]>>>24)&255)<250) frontier.push(p+W);
+  }
+  let depth=0;
+  while(frontier.length && depth<3){
+    const next=[];
+    for(const q of frontier){
+      if(filled[q])continue; filled[q]=1; data[q]=fill;
+      const x=q%W;
+      if(x>0   && !filled[q-1] && ((data[q-1]>>>24)&255)<250) next.push(q-1);
+      if(x<W-1 && !filled[q+1] && ((data[q+1]>>>24)&255)<250) next.push(q+1);
+      if(q>=W  && !filled[q-W] && ((data[q-W]>>>24)&255)<250) next.push(q-W);
+      if(q+W<W*H && !filled[q+W] && ((data[q+W]>>>24)&255)<250) next.push(q+W);
+    }
+    frontier=next; depth++;
+  }
+  c.putImageData(img,0,0);
+}
+
+// 線と塗りを記録した順に再生する（もどす・提出・再描画で共通）
+function replay(c, cssW, cssH, devW, devH, transparentBg){
+  strokes.forEach(op=>{
+    if(op.fill){ floodFill(c, devW, devH, op.x*devW, op.y*devH, op.color); }
+    else { drawStrokeOn(c, cssW, cssH, op, transparentBg); }
+  });
+}
+function redraw(){
+  const {w,h}=cssSize();
+  ctx.clearRect(0,0,w,h);                 // 透明にする（うしろの したじき写真が見える）
+  replay(ctx, w, h, canvas.width, canvas.height, true);
+}
+
+// ポインター（指・マウス共通）
+function pos(e){
+  const r=canvas.getBoundingClientRect();
+  return { x:(e.clientX-r.left)/r.width, y:(e.clientY-r.top)/r.height };
+}
+let segBuf=[]; // ライブ送信用にためる線分
+canvas.addEventListener('pointerdown',e=>{
+  if(state.role!=='student')return;
+  const p=pos(e);
+  if(tool==='fill'){                       // バケツ：その場でぬる＋記録＋ライブ送信
+    const op={fill:true,x:p.x,y:p.y,color:penColor};
+    strokes.push(op);
+    floodFill(ctx,canvas.width,canvas.height,p.x*canvas.width,p.y*canvas.height,penColor);
+    sendFill(p);
+    return;
+  }
+  drawing=true; canvas.setPointerCapture(e.pointerId);
+  cur={color:penColor,sizeFrac,erase:(tool==='eraser'),brush:(tool==='eraser'?'pen':brush),seed:((Math.random()*1e9)>>>0),pts:[p]};
+  strokes.push(cur);
+  drawDab(p);
+});
+canvas.addEventListener('pointermove',e=>{
+  if(!drawing)return;
+  const p=pos(e); const prev=cur.pts[cur.pts.length-1];
+  const idx=cur.pts.length;            // この点の番号
+  cur.pts.push(p);
+  const {w,h}=cssSize();
+  drawSeg(ctx,w,h,cur,prev,p,idx);
+  segBuf.push({c:cur.color,s:cur.sizeFrac,e:cur.erase,b:cur.brush,seed:cur.seed,i:idx,x1:prev.x,y1:prev.y,x2:p.x,y2:p.y});
+});
+function endStroke(e){ if(!drawing)return; drawing=false; flushSegs(); }
+canvas.addEventListener('pointerup',endStroke);
+canvas.addEventListener('pointercancel',endStroke);
+canvas.addEventListener('pointerleave',endStroke);
+// 1区間だけ描き足す（毎回全部描くと重いから）
+function drawSeg(c,w,h,st,prev,p,idx){
+  c.save(); c.lineCap='round'; c.lineJoin='round';
+  if(st.erase){ c.globalCompositeOperation='destination-out'; c.strokeStyle='rgba(0,0,0,1)'; c.lineWidth=st.sizeFrac*w;
+    c.beginPath(); c.moveTo(prev.x*w,prev.y*h); c.lineTo(p.x*w,p.y*h); c.stroke(); c.restore(); return; }
+  if(st.brush==='spray'){ sprayStamp(c,w,h,st,p,idx); c.restore(); return; }
+  if(st.brush==='marker'){ c.globalAlpha=0.4; c.lineWidth=st.sizeFrac*w*1.6; }
+  else c.lineWidth=st.sizeFrac*w;
+  c.strokeStyle=st.color;
+  c.beginPath(); c.moveTo(prev.x*w,prev.y*h); c.lineTo(p.x*w,p.y*h); c.stroke(); c.restore();
+}
+function drawDab(p){ const {w,h}=cssSize();
+  if(cur.brush==='spray'){ ctx.save(); sprayStamp(ctx,w,h,cur,p,0); ctx.restore(); return; }
+  ctx.save();
+  if(cur.erase){ ctx.globalCompositeOperation='destination-out'; ctx.fillStyle='rgba(0,0,0,1)'; }
+  else { if(cur.brush==='marker')ctx.globalAlpha=0.4; ctx.fillStyle=cur.color; }
+  const r=(cur.sizeFrac*w)/2*(cur.brush==='marker'?1.6:1);
+  ctx.beginPath(); ctx.arc(p.x*w,p.y*h,r,0,6.283185); ctx.fill(); ctx.restore(); }
+
+// ライブ送信（70msごとにまとめて）
+setInterval(flushSegs,70);
+function flushSegs(){
+  if(!state.channel || segBuf.length===0)return;
+  const segs=segBuf; segBuf=[];
+  state.channel.send({type:'broadcast',event:'draw',payload:{id:DEVICE,name:state.name,segs}});
+}
+function sendFill(p){ if(state.channel) state.channel.send({type:'broadcast',event:'fill',payload:{id:DEVICE,name:state.name,x:p.x,y:p.y,color:penColor}}); }
+function sendClear(){ if(state.channel) state.channel.send({type:'broadcast',event:'clear',payload:{id:DEVICE}}); }
+
+// 提出：完成画像をつくって保存
+const submitBtn=document.getElementById('submitBtn');
+submitBtn.onclick=async ()=>{
+  if(!supabase)return;
+  submitBtn.disabled=true; submitBtn.textContent='おくっています…';
+  const off=document.createElement('canvas'); off.width=1200; off.height=900;
+  const oc=off.getContext('2d');
+  replay(oc,1200,900,1200,900,true);              // 透明な紙の上に（halo対策のため）
+  const flat=document.createElement('canvas'); flat.width=1200; flat.height=900;
+  const fc=flat.getContext('2d'); fc.fillStyle='#ffffff'; fc.fillRect(0,0,1200,900);
+  fc.drawImage(off,0,0);                           // 白でうしろをうめて1枚に
+  const image=flat.toDataURL('image/png');
+  try{
+    // device_id でうわがき＝1人1まいに保つ（出しなおしてもダブらない）
+    const {error}=await supabase.from('drawings')
+      .upsert({room:state.room,device_id:DEVICE,name:state.name,image},{onConflict:'room,device_id'});
+    if(error)throw error;
+    if(state.channel) state.channel.send({type:'broadcast',event:'submitted',payload:{id:DEVICE,name:state.name}});
+    showToast();
+  }catch(err){
+    alert('ていしゅつ できませんでした。\nせんせいに みせてね。\n('+(err.message||err)+')');
+  }finally{
+    submitBtn.disabled=false; submitBtn.textContent='📨 ていしゅつ';
+  }
+};
+const toast=document.getElementById('toast');
+function showToast(){ toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'),1800); }
+
+/* =====================================================================
+   先生：ライブ＆ギャラリー
+===================================================================== */
+const liveGrid=document.getElementById('liveGrid');
+const galleryGrid=document.getElementById('galleryGrid');
+const tiles={}; // id → {wrap,canvas,ctx,submitted}
+
+function ensureTile(id,name){
+  if(tiles[id])return tiles[id];
+  const wrap=document.createElement('div'); wrap.className='tile';
+  const cv=document.createElement('canvas'); cv.width=320; cv.height=240;
+  const c=cv.getContext('2d'); c.fillStyle='#fff'; c.fillRect(0,0,320,240);
+  const nm=document.createElement('div'); nm.className='name';
+  nm.innerHTML='<span class="dot on"></span><span>'+escapeHtml(name||'だれか')+'</span>';
+  wrap.appendChild(cv); wrap.appendChild(nm);
+  liveGrid.appendChild(wrap);
+  const t = tiles[id]={wrap,canvas:cv,ctx:c,nameEl:nm,submitted:false};
+  refreshLiveEmpty();
+  return t;
+}
+function refreshLiveEmpty(){
+  if(Object.keys(tiles).length===0 && !liveGrid.querySelector('.empty')){
+    liveGrid.innerHTML='<div class="empty">まだ だれも かいていません。<br>せいとが かきはじめると ここに でます。</div>';
+  }else if(Object.keys(tiles).length>0){
+    const e=liveGrid.querySelector('.empty'); if(e)e.remove();
+  }
+}
+function teacherSpray(c,s){
+  const W=320,H=240; c.fillStyle=s.c;
+  const r=s.s*W*2.2, dots=Math.max(8,Math.round(s.s*W*1.3));
+  const rng=mulberry32(((s.seed||1)+(s.i||0)*9973)>>>0);
+  for(let k=0;k<dots;k++){ const ang=rng()*6.283185, rad=Math.sqrt(rng())*r;
+    const x=s.x2*W+Math.cos(ang)*rad, y=s.y2*H+Math.sin(ang)*rad;
+    c.globalAlpha=0.35+rng()*0.5; c.beginPath(); c.arc(x,y,Math.max(0.6,r*0.07),0,6.283185); c.fill(); }
+  c.globalAlpha=1;
+}
+function handleDraw(p){
+  const t=ensureTile(p.id,p.name);
+  if(p.name && t.nameEl) t.nameEl.querySelector('span:last-child').textContent=p.name;
+  const c=t.ctx;
+  p.segs.forEach(s=>{
+    c.save(); c.lineCap='round'; c.lineJoin='round';
+    if(s.e){ c.strokeStyle='#ffffff'; c.lineWidth=s.s*320;
+      c.beginPath(); c.moveTo(s.x1*320,s.y1*240); c.lineTo(s.x2*320,s.y2*240); c.stroke(); c.restore(); return; }
+    if(s.b==='spray'){ teacherSpray(c,s); c.restore(); return; }
+    if(s.b==='marker'){ c.globalAlpha=0.4; c.lineWidth=s.s*320*1.6; }
+    else c.lineWidth=s.s*320;
+    c.strokeStyle=s.c;
+    c.beginPath(); c.moveTo(s.x1*320,s.y1*240); c.lineTo(s.x2*320,s.y2*240); c.stroke(); c.restore();
+  });
+}
+function handleClear(p){ const t=tiles[p.id]; if(t){ t.ctx.fillStyle='#fff'; t.ctx.fillRect(0,0,320,240); } }
+function handleFill(p){ const t=ensureTile(p.id,p.name); floodFill(t.ctx,320,240,p.x*320,p.y*240,p.color); }
+function handleSubmitted(p){
+  const t=ensureTile(p.id,p.name);
+  if(!t.submitted){ t.submitted=true; const b=document.createElement('div'); b.className='badge'; b.textContent='ていしゅつ ✓'; t.wrap.appendChild(b); }
+  if(galleryVisible) loadGallery();
+}
+
+// ギャラリー読み込み
+let galleryVisible=false;
+let galleryData=[];
+async function loadGallery(){
+  if(!supabase)return;
+  const {data,error}=await supabase.from('drawings').select('name,image,device_id,created_at')
+    .eq('room',state.room).order('created_at',{ascending:false});
+  if(error){ galleryGrid.innerHTML='<div class="empty">よみこみ できませんでした。<br>'+escapeHtml(error.message)+'</div>'; return; }
+  galleryData=data||[];
+  document.getElementById('galCount').textContent=galleryData.length+'まい';
+  if(galleryData.length===0){ galleryGrid.innerHTML='<div class="empty">まだ ていしゅつ が ありません。</div>'; return; }
+  galleryGrid.innerHTML='';
+  galleryData.forEach(d=>{
+    const wrap=document.createElement('div'); wrap.className='tile';
+    const img=document.createElement('img'); img.src=d.image; img.alt=d.name||'';
+    img.onclick=()=>openModal(d.image,d.name);
+    const del=document.createElement('button'); del.className='del'; del.textContent='🗑️ けす';
+    del.onclick=e=>{ e.stopPropagation(); deleteOne(d); };
+    const nm=document.createElement('div'); nm.className='name'; nm.textContent=d.name||'なまえなし';
+    wrap.appendChild(img); wrap.appendChild(del); wrap.appendChild(nm); galleryGrid.appendChild(wrap);
+  });
+}
+document.getElementById('reloadGal').onclick=loadGallery;
+
+// 1枚けす・ぜんぶけす（もとに戻せないので確認します）
+async function deleteOne(d){
+  if(!confirm('「'+(d.name||'なまえなし')+'」の えを けしますか？\nもとには もどせません。'))return;
+  const {error}=await supabase.from('drawings').delete().eq('room',state.room).eq('device_id',d.device_id);
+  if(error){ alert('けせませんでした。\n'+(error.message||'')); return; }
+  loadGallery();
+}
+async function deleteAll(){
+  if(galleryData.length===0){ alert('けすものが ありません。'); return; }
+  if(!confirm('この あいことば の えを ぜんぶ けしますか？（'+galleryData.length+'まい）\nもとには もどせません。'))return;
+  const {error}=await supabase.from('drawings').delete().eq('room',state.room);
+  if(error){ alert('けせませんでした。\n'+(error.message||'')); return; }
+  loadGallery();
+}
+document.getElementById('clearAllBtn').onclick=deleteAll;
+
+// みんなにみせる（提示モード：プロジェクターや画面共有で大きく表示）
+const present=document.getElementById('present');
+const presentImg=document.getElementById('presentImg');
+let presentIdx=0;
+async function openPresent(){
+  await loadGallery();
+  if(galleryData.length===0){ alert('まだ ていしゅつ が ありません。'); return; }
+  presentIdx=0; present.classList.add('show'); renderPresent();
+  if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(()=>{});
+}
+function renderPresent(){
+  const d=galleryData[presentIdx]; if(!d)return;
+  presentImg.src=d.image;
+  document.getElementById('presentName').textContent=d.name||'なまえなし';
+  document.getElementById('presentCount').textContent=(presentIdx+1)+' / '+galleryData.length;
+}
+function presentMove(n){ if(!galleryData.length)return; presentIdx=(presentIdx+n+galleryData.length)%galleryData.length; renderPresent(); }
+function closePresent(){ present.classList.remove('show'); if(document.fullscreenElement)document.exitFullscreen().catch(()=>{}); }
+document.getElementById('presentBtn').onclick=openPresent;
+document.getElementById('presentPrev').onclick=()=>presentMove(-1);
+document.getElementById('presentNext').onclick=()=>presentMove(1);
+document.getElementById('presentClose').onclick=closePresent;
+document.addEventListener('keydown',e=>{ if(!present.classList.contains('show'))return;
+  if(e.key==='ArrowRight')presentMove(1); else if(e.key==='ArrowLeft')presentMove(-1); else if(e.key==='Escape')closePresent(); });
+
+// タブ
+const tabLive=document.getElementById('tabLive'), tabGallery=document.getElementById('tabGallery');
+tabLive.onclick=()=>{ tabLive.classList.add('sel'); tabGallery.classList.remove('sel');
+  document.getElementById('liveView').style.display='flex'; document.getElementById('galleryView').style.display='none'; galleryVisible=false; };
+tabGallery.onclick=()=>{ tabGallery.classList.add('sel'); tabLive.classList.remove('sel');
+  document.getElementById('galleryView').style.display='flex'; document.getElementById('liveView').style.display='none'; galleryVisible=true; loadGallery(); };
+
+// モーダル
+const modal=document.getElementById('modal');
+function openModal(src,name){ document.getElementById('modalImg').src=src;
+  const dl=document.getElementById('modalDl'); dl.href=src; dl.download=(name||'oekaki')+'.png'; modal.classList.add('show'); }
+document.getElementById('modalClose').onclick=()=>modal.classList.remove('show');
+modal.onclick=e=>{ if(e.target===modal)modal.classList.remove('show'); };
+
+/* =====================================================================
+   入口ボタン
+===================================================================== */
+function setDot(on){ document.getElementById('stuDot').classList.toggle('on',on); document.getElementById('teaDot').classList.toggle('on',on); }
+
+document.getElementById('goStudent').onclick=()=>start('student');
+document.getElementById('goTeacher').onclick=()=>start('teacher');
+
+async function start(role){
+  if(!supabase){ alert('さきに Supabase の せってい を いれてね。'); return; }
+  const room=roomInput.value.trim();
+  if(!room){ alert('あいことば を いれてね。'); return; }
+  const name=nameInput.value.trim();
+  if(role==='student' && !name){ alert('なまえ を いれてね。'); return; }
+  localStorage.setItem('oekaki_room',room);
+  if(name) localStorage.setItem('oekaki_name',name);
+
+  state.room=room; state.name=name; state.role=role;
+  const ch=joinChannel(room);
+  if(role==='teacher'){
+    ch.on('broadcast',{event:'draw'},m=>handleDraw(m.payload))
+      .on('broadcast',{event:'fill'},m=>handleFill(m.payload))
+      .on('broadcast',{event:'clear'},m=>handleClear(m.payload))
+      .on('broadcast',{event:'submitted'},m=>handleSubmitted(m.payload));
+  }
+  ch.subscribe(status=>{ setDot(status==='SUBSCRIBED'); });
+  state.channel=ch;
+
+  if(role==='student'){
+    document.getElementById('stuName').textContent=name;
+    document.getElementById('stuRoom').textContent=room;
+    show('student'); requestAnimationFrame(layoutCanvas);
+  }else{
+    document.getElementById('teaRoom').textContent=room;
+    Object.keys(tiles).forEach(k=>delete tiles[k]); liveGrid.innerHTML=''; refreshLiveEmpty();
+    show('teacher');
+  }
+}
+
+// もどる
+document.getElementById('stuBack').onclick=()=>leave();
+document.getElementById('teaBack').onclick=()=>leave();
+function leave(){ if(state.channel){ supabase.removeChannel(state.channel); state.channel=null; }
+  setDot(false); show('entry'); }
+
+window.addEventListener('resize',()=>{ if(document.getElementById('student').classList.contains('active')) layoutCanvas(); });
+
+function escapeHtml(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+</script>
+</body>
+</html>
