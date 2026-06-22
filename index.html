@@ -138,6 +138,12 @@
   .present-nav{font-family:inherit;font-size:24px;font-weight:700;border:none;border-radius:14px;background:#3a3a4a;color:#fff;padding:12px 26px;cursor:pointer;}
   .present-nav:active{transform:translateY(2px);}
   .present-close{position:absolute;top:16px;right:16px;z-index:2;font-family:inherit;font-weight:700;border:none;border-radius:12px;background:#3a3a4a;color:#fff;padding:10px 16px;font-size:16px;cursor:pointer;}
+
+  /* ---- わたしのさくひん ---- */
+  .myworks{position:fixed;inset:0;background:var(--bg);display:none;flex-direction:column;z-index:55;}
+  .myworks.show{display:flex;}
+  .mw-bar{display:flex;align-items:center;gap:10px;padding:12px 16px;background:#fff;border-bottom:3px solid var(--line);}
+  .mw-title{font-weight:700;font-size:18px;}
 </style>
 </head>
 <body>
@@ -170,6 +176,7 @@
     <span class="who" id="stuName">なまえ</span>
     <span class="room" id="stuRoom"></span>
     <span class="spacer"></span>
+    <button class="mini-btn" id="myWorksBtn">🖼️ わたしのさくひん</button>
     <span class="dot" id="stuDot"></span>
   </div>
   <div class="stage">
@@ -258,6 +265,17 @@
 </div>
 
 <div class="toast" id="toast">📨 ていしゅつ できたよ！</div>
+
+<!-- わたしのさくひん（生徒が自分の提出を見返す） -->
+<div class="myworks" id="myworks">
+  <div class="mw-bar">
+    <span class="mw-title">🖼️ わたしの さくひん</span>
+    <span style="flex:1"></span>
+    <button class="mini-btn" id="mwReload">🔄 さいよみこみ</button>
+    <button class="mini-btn" id="mwClose">とじる</button>
+  </div>
+  <div class="grid" id="mwGrid"></div>
+</div>
 
 <!-- 提示（みんなにみせる）全画面 -->
 <div class="present" id="present">
@@ -385,6 +403,30 @@ function setPhoto(src){
   photoLayer.style.opacity=photoOpacity.value/100;
   photoLayer.src=src; photoLayer.style.display='block';
 }
+
+// ---- わたしのさくひん（自分が提出した絵を見返す） ----
+const myworks=document.getElementById('myworks');
+const mwGrid=document.getElementById('mwGrid');
+async function openMyWorks(){
+  if(!supabase)return;
+  myworks.classList.add('show');
+  mwGrid.innerHTML='<div class="empty">よみこみちゅう…</div>';
+  const {data,error}=await supabase.from('drawings').select('id,image,created_at')
+    .eq('room',state.room).eq('device_id',DEVICE).order('created_at',{ascending:false});
+  if(error){ mwGrid.innerHTML='<div class="empty">よみこめませんでした。<br>'+escapeHtml(error.message)+'</div>'; return; }
+  if(!data||!data.length){ mwGrid.innerHTML='<div class="empty">まだ ていしゅつ した えが ありません。</div>'; return; }
+  mwGrid.innerHTML='';
+  data.forEach((d,i)=>{
+    const wrap=document.createElement('div'); wrap.className='tile';
+    const img=document.createElement('img'); img.src=d.image; img.alt='';
+    img.onclick=()=>openModal(d.image,'わたしのさくひん');
+    const nm=document.createElement('div'); nm.className='name'; nm.textContent=(data.length-i)+'まいめ';
+    wrap.appendChild(img); wrap.appendChild(nm); mwGrid.appendChild(wrap);
+  });
+}
+document.getElementById('myWorksBtn').onclick=openMyWorks;
+document.getElementById('mwReload').onclick=openMyWorks;
+document.getElementById('mwClose').onclick=()=>myworks.classList.remove('show');
 
 // キャンバスの実ピクセル設定（くっきり表示）
 function fitCanvas(){
@@ -594,9 +636,9 @@ submitBtn.onclick=async ()=>{
   fc.drawImage(off,0,0);                           // 白でうしろをうめて1枚に
   const image=flat.toDataURL('image/png');
   try{
-    // device_id でうわがき＝1人1まいに保つ（出しなおしてもダブらない）
+    // 提出するたびに別の1枚として残す（積み重ね）
     const {error}=await supabase.from('drawings')
-      .upsert({room:state.room,device_id:DEVICE,name:state.name,image},{onConflict:'room,device_id'});
+      .insert({room:state.room,device_id:DEVICE,name:state.name,image});
     if(error)throw error;
     if(state.channel) state.channel.send({type:'broadcast',event:'submitted',payload:{id:DEVICE,name:state.name}});
     showToast();
@@ -673,7 +715,7 @@ let galleryVisible=false;
 let galleryData=[];
 async function loadGallery(){
   if(!supabase)return;
-  const {data,error}=await supabase.from('drawings').select('name,image,device_id,created_at')
+  const {data,error}=await supabase.from('drawings').select('id,name,image,device_id,created_at')
     .eq('room',state.room).order('created_at',{ascending:false});
   if(error){ galleryGrid.innerHTML='<div class="empty">よみこみ できませんでした。<br>'+escapeHtml(error.message)+'</div>'; return; }
   galleryData=data||[];
@@ -694,8 +736,8 @@ document.getElementById('reloadGal').onclick=loadGallery;
 
 // 1枚けす・ぜんぶけす（もとに戻せないので確認します）
 async function deleteOne(d){
-  if(!confirm('「'+(d.name||'なまえなし')+'」の えを けしますか？\nもとには もどせません。'))return;
-  const {error}=await supabase.from('drawings').delete().eq('room',state.room).eq('device_id',d.device_id);
+  if(!confirm('「'+(d.name||'なまえなし')+'」の えを 1まい けしますか？\nもとには もどせません。'))return;
+  const {error}=await supabase.from('drawings').delete().eq('id',d.id);
   if(error){ alert('けせませんでした。\n'+(error.message||'')); return; }
   loadGallery();
 }
