@@ -566,6 +566,7 @@ function pos(e){
   return { x:(e.clientX-r.left)/r.width, y:(e.clientY-r.top)/r.height };
 }
 let segBuf=[]; // ライブ送信用にためる線分
+let markerBase=null; // マーカーを1本描きするための「描き始めの状態」
 canvas.addEventListener('pointerdown',e=>{
   if(state.role!=='student')return;
   const p=pos(e);
@@ -579,7 +580,12 @@ canvas.addEventListener('pointerdown',e=>{
   drawing=true; canvas.setPointerCapture(e.pointerId);
   cur={color:penColor,sizeFrac,erase:(tool==='eraser'),brush:(tool==='eraser'?'pen':brush),seed:((Math.random()*1e9)>>>0),pts:[p]};
   strokes.push(cur);
-  drawDab(p);
+  if(cur.brush==='marker' && !cur.erase){
+    markerBase=ctx.getImageData(0,0,canvas.width,canvas.height); // 描き始めの状態を記録
+    redrawCurrentMarker();
+  } else {
+    drawDab(p);
+  }
 });
 canvas.addEventListener('pointermove',e=>{
   if(!drawing)return;
@@ -587,10 +593,14 @@ canvas.addEventListener('pointermove',e=>{
   const idx=cur.pts.length;            // この点の番号
   cur.pts.push(p);
   const {w,h}=cssSize();
-  drawSeg(ctx,w,h,cur,prev,p,idx);
+  if(cur.brush==='marker' && !cur.erase){
+    redrawCurrentMarker();
+  } else {
+    drawSeg(ctx,w,h,cur,prev,p,idx);
+  }
   segBuf.push({c:cur.color,s:cur.sizeFrac,e:cur.erase,b:cur.brush,seed:cur.seed,i:idx,x1:prev.x,y1:prev.y,x2:p.x,y2:p.y});
 });
-function endStroke(e){ if(!drawing)return; drawing=false; flushSegs(); }
+function endStroke(e){ if(!drawing)return; drawing=false; markerBase=null; flushSegs(); }
 canvas.addEventListener('pointerup',endStroke);
 canvas.addEventListener('pointercancel',endStroke);
 canvas.addEventListener('pointerleave',endStroke);
@@ -612,6 +622,22 @@ function drawDab(p){ const {w,h}=cssSize();
   else { if(cur.brush==='marker')ctx.globalAlpha=0.4; ctx.fillStyle=cur.color; }
   const r=(cur.sizeFrac*w)/2*(cur.brush==='marker'?1.6:1);
   ctx.beginPath(); ctx.arc(p.x*w,p.y*h,r,0,6.283185); ctx.fill(); ctx.restore(); }
+
+// マーカー：描き始めの状態にもどしてから、今の線を「1本の連続線」として半透明で描く。
+// 区間ごとに重ね描きしないので、つなぎ目が濃くならず点々にならない。
+function redrawCurrentMarker(){
+  if(!markerBase)return;
+  ctx.putImageData(markerBase,0,0);           // 描き始めの状態にもどす
+  const {w,h}=cssSize();
+  ctx.save();
+  ctx.globalAlpha=0.4; ctx.lineCap='round'; ctx.lineJoin='round';
+  ctx.strokeStyle=cur.color; ctx.lineWidth=cur.sizeFrac*w*1.6;
+  ctx.beginPath();
+  cur.pts.forEach((pt,i)=>{ const x=pt.x*w,y=pt.y*h; i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+  if(cur.pts.length===1){ const pt=cur.pts[0]; ctx.lineTo(pt.x*w+0.01,pt.y*h+0.01); } // 点だけでも丸く出す
+  ctx.stroke();
+  ctx.restore();
+}
 
 // ライブ送信（70msごとにまとめて）
 setInterval(flushSegs,70);
