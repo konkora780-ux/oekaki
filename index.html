@@ -829,6 +829,9 @@ async function start(role){
   if(!room){ alert('あいことば を いれてね。'); return; }
   const name=nameInput.value.trim();
   if(role==='student' && !name){ alert('なまえ を いれてね。'); return; }
+  if(role==='teacher'){
+    if(!confirm('せんせい ですか？\nこの がめんは せんせいよう です。\n（せいとは 「もどる」で もどってね）')) return;
+  }
   localStorage.setItem('oekaki_room',room);
   if(name) localStorage.setItem('oekaki_name',name);
 
