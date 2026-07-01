@@ -215,6 +215,8 @@
       <button class="mini-btn" id="photoUrlBtn">URLからのせる</button>
       <span class="opacity-label">うすさ <input type="range" id="photoOpacity" min="0" max="70" value="35"></span>
       <button class="mini-btn" id="photoClearBtn">✖ したじきをけす</button>
+      <button class="mini-btn" id="photoResetBtn">↺ もとの大きさ</button>
+      <span class="opacity-label">2ほんゆびで 大きさ・いちが かえられます</span>
     </div>
     <input type="file" id="photoFile" accept="image/*" style="display:none">
   </div>
@@ -396,11 +398,13 @@ document.getElementById('photoBtn').onclick=()=>{ photoPanel.style.display = (ph
 document.getElementById('photoFileBtn').onclick=()=>photoFile.click();
 photoFile.onchange=e=>{ const f=e.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>setPhoto(r.result); r.readAsDataURL(f); };
 document.getElementById('photoUrlBtn').onclick=()=>{ const u=document.getElementById('photoUrl').value.trim(); if(u)setPhoto(u); };
-document.getElementById('photoClearBtn').onclick=()=>{ photoLayer.removeAttribute('src'); photoLayer.style.display='none'; };
+document.getElementById('photoClearBtn').onclick=()=>{ photoLayer.removeAttribute('src'); photoLayer.style.display='none'; resetPhotoTransform(); };
+document.getElementById('photoResetBtn').onclick=()=>resetPhotoTransform();
 photoOpacity.oninput=function(){ photoLayer.style.opacity=this.value/100; };
 function setPhoto(src){
   photoLayer.onerror=()=>{ photoLayer.style.display='none'; alert('このがぞうは よみこめませんでした。\nべつのがぞうか、「ファイルからえらぶ」で ためしてください。'); };
   photoLayer.style.opacity=photoOpacity.value/100;
+  resetPhotoTransform();                 // 新しい下敷きは 元の大きさから
   photoLayer.src=src; photoLayer.style.display='block';
 }
 
@@ -567,8 +571,31 @@ function pos(e){
 }
 let segBuf=[]; // ライブ送信用にためる線分
 let markerBase=null; // マーカーを1本描きするための「描き始めの状態」
+// ---- 下敷き写真の 2本指ピンチ（拡大・縮小・いどう）----
+const activePtrs=new Map();   // いま触れている指
+let gesture=null;             // 2本指操作の開始情報
+let gestureLock=false;        // 2本指中〜全部はなすまで お絵かきを止める
+let photoScale=1, photoTX=0, photoTY=0;
+function applyPhotoTransform(){ photoLayer.style.transform=`translate(${photoTX}px,${photoTY}px) scale(${photoScale})`; }
+function resetPhotoTransform(){ photoScale=1; photoTX=0; photoTY=0; applyPhotoTransform(); }
+function ptrDist(a,b){ return Math.hypot(a.x-b.x,a.y-b.y); }
+function ptrMid(a,b){ return {x:(a.x+b.x)/2,y:(a.y+b.y)/2}; }
+function photoActive(){ return photoLayer.style.display!=='none' && !!photoLayer.getAttribute('src'); }
 canvas.addEventListener('pointerdown',e=>{
   if(state.role!=='student')return;
+  activePtrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+
+  // 2本指になったら「下敷きをピンチ操作」モードに切りかえ
+  if(activePtrs.size===2 && photoActive()){
+    // 1本目で描き始めていた線は取り消す（誤って点がつくのを防ぐ）
+    if(drawing && cur){ if(strokes[strokes.length-1]===cur) strokes.pop(); drawing=false; markerBase=null; redraw(); }
+    const pv=[...activePtrs.values()];
+    gesture={ d0:ptrDist(pv[0],pv[1]), m0:ptrMid(pv[0],pv[1]), s0:photoScale, tx0:photoTX, ty0:photoTY };
+    gestureLock=true;
+    return;
+  }
+  if(gestureLock) return; // 2本指操作中は描かない
+
   const p=pos(e);
   if(tool==='fill'){                       // バケツ：その場でぬる＋記録＋ライブ送信
     const op={fill:true,x:p.x,y:p.y,color:penColor};
@@ -588,6 +615,18 @@ canvas.addEventListener('pointerdown',e=>{
   }
 });
 canvas.addEventListener('pointermove',e=>{
+  if(activePtrs.has(e.pointerId)) activePtrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+
+  // 2本指：下敷きを拡大縮小＋移動
+  if(gesture && activePtrs.size>=2){
+    const pv=[...activePtrs.values()];
+    const d=ptrDist(pv[0],pv[1]), m=ptrMid(pv[0],pv[1]);
+    photoScale=Math.max(0.2,Math.min(8, gesture.s0*(d/gesture.d0)));
+    photoTX=gesture.tx0+(m.x-gesture.m0.x);
+    photoTY=gesture.ty0+(m.y-gesture.m0.y);
+    applyPhotoTransform();
+    return;
+  }
   if(!drawing)return;
   const p=pos(e); const prev=cur.pts[cur.pts.length-1];
   const idx=cur.pts.length;            // この点の番号
@@ -600,7 +639,12 @@ canvas.addEventListener('pointermove',e=>{
   }
   segBuf.push({c:cur.color,s:cur.sizeFrac,e:cur.erase,b:cur.brush,seed:cur.seed,i:idx,x1:prev.x,y1:prev.y,x2:p.x,y2:p.y});
 });
-function endStroke(e){ if(!drawing)return; drawing=false; markerBase=null; flushSegs(); }
+function endStroke(e){
+  if(e && activePtrs.has(e.pointerId)) activePtrs.delete(e.pointerId);
+  if(gesture && activePtrs.size<2) gesture=null;   // 2本指がくずれたら ピンチ終了
+  if(activePtrs.size===0) gestureLock=false;       // 全部はなしたら お絵かき再開
+  if(!drawing)return; drawing=false; markerBase=null; flushSegs();
+}
 canvas.addEventListener('pointerup',endStroke);
 canvas.addEventListener('pointercancel',endStroke);
 canvas.addEventListener('pointerleave',endStroke);
