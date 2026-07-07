@@ -112,10 +112,11 @@
     padding:10px 20px;border-radius:12px;font-size:17px;cursor:pointer;}
   .tab.sel{background:var(--blue);color:#fff;}
   .grid{flex:1;min-height:0;overflow:auto;padding:14px;display:grid;gap:14px;
-    grid-template-columns:repeat(auto-fill,minmax(220px,1fr));align-content:start;}
+    grid-template-columns:repeat(auto-fill,minmax(240px,1fr));align-content:start;}
   .tile{background:#fff;border-radius:14px;box-shadow:0 3px 10px rgba(0,0,0,.08);overflow:hidden;position:relative;}
   .tile .name{padding:8px 12px;font-weight:700;font-size:15px;display:flex;align-items:center;gap:6px;}
-  .tile canvas,.tile img{width:100%;height:150px;display:block;background:#fff;object-fit:contain;}
+  .tile .thumb{position:relative;width:100%;padding-bottom:75%;background:#fff;overflow:hidden;}
+  .tile .thumb canvas,.tile .thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;background:#fff;}
   .badge{position:absolute;top:8px;right:8px;background:var(--green);color:#fff;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;}
   .empty{flex:1;display:flex;align-items:center;justify-content:center;color:#9a9281;font-size:18px;text-align:center;padding:30px;grid-column:1/-1;}
   .gallery-tools{display:flex;gap:10px;align-items:center;padding:10px 14px;background:#faf6ee;border-bottom:2px solid var(--line);}
@@ -441,10 +442,12 @@ async function openMyWorks(){
   mwGrid.innerHTML='';
   data.forEach((d,i)=>{
     const wrap=document.createElement('div'); wrap.className='tile';
+    const th=document.createElement('div'); th.className='thumb';
     const img=document.createElement('img'); img.src=d.image; img.alt='';
     img.onclick=()=>openModal(d.image,'わたしのさくひん');
+    th.appendChild(img);
     const nm=document.createElement('div'); nm.className='name'; nm.textContent=(data.length-i)+'まいめ';
-    wrap.appendChild(img); wrap.appendChild(nm); mwGrid.appendChild(wrap);
+    wrap.appendChild(th); wrap.appendChild(nm); mwGrid.appendChild(wrap);
   });
 }
 document.getElementById('myWorksBtn').onclick=openMyWorks;
@@ -761,11 +764,13 @@ const tiles={}; // id → {wrap,canvas,ctx,submitted}
 function ensureTile(id,name){
   if(tiles[id])return tiles[id];
   const wrap=document.createElement('div'); wrap.className='tile';
+  const th=document.createElement('div'); th.className='thumb';
   const cv=document.createElement('canvas'); cv.width=320; cv.height=240;
   const c=cv.getContext('2d'); c.fillStyle='#fff'; c.fillRect(0,0,320,240);
+  th.appendChild(cv);
   const nm=document.createElement('div'); nm.className='name';
   nm.innerHTML='<span class="dot on"></span><span>'+escapeHtml(name||'だれか')+'</span>';
-  wrap.appendChild(cv); wrap.appendChild(nm);
+  wrap.appendChild(th); wrap.appendChild(nm);
   liveGrid.appendChild(wrap);
   const t = tiles[id]={wrap,canvas:cv,ctx:c,nameEl:nm,submitted:false};
   refreshLiveEmpty();
@@ -824,12 +829,14 @@ async function loadGallery(){
   galleryGrid.innerHTML='';
   galleryData.forEach(d=>{
     const wrap=document.createElement('div'); wrap.className='tile';
+    const th=document.createElement('div'); th.className='thumb';
     const img=document.createElement('img'); img.src=d.image; img.alt=d.name||'';
     img.onclick=()=>openModal(d.image,d.name);
+    th.appendChild(img);
     const del=document.createElement('button'); del.className='del'; del.textContent='🗑️ けす';
     del.onclick=e=>{ e.stopPropagation(); deleteOne(d); };
     const nm=document.createElement('div'); nm.className='name'; nm.textContent=d.name||'なまえなし';
-    wrap.appendChild(img); wrap.appendChild(del); wrap.appendChild(nm); galleryGrid.appendChild(wrap);
+    wrap.appendChild(th); wrap.appendChild(del); wrap.appendChild(nm); galleryGrid.appendChild(wrap);
   });
 }
 document.getElementById('reloadGal').onclick=loadGallery;
