@@ -120,7 +120,10 @@
   .tile .thumb canvas,.tile .thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:block;background:#fff;}
   .badge{position:absolute;top:8px;right:8px;background:var(--green);color:#fff;font-size:12px;font-weight:700;padding:3px 10px;border-radius:999px;}
   .empty{flex:1;display:flex;align-items:center;justify-content:center;color:#9a9281;font-size:18px;text-align:center;padding:30px;grid-column:1/-1;}
-  .gallery-tools{display:flex;gap:10px;align-items:center;padding:10px 14px;background:#faf6ee;border-bottom:2px solid var(--line);}
+  .tile.selected{outline:4px solid #1e78dc;outline-offset:-3px;}
+  .tile.selected::after{content:'✓';position:absolute;top:8px;left:8px;background:#1e78dc;color:#fff;width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;z-index:2;}
+  .grid.selecting .tile{cursor:pointer;}
+  .gallery-tools{display:flex;gap:10px;align-items:center;padding:10px 14px;background:#faf6ee;border-bottom:2px solid var(--line);flex-wrap:wrap;}
   .count{font-weight:700;color:#7a7363;}
 
   /* ---- 拡大モーダル ---- */
@@ -238,6 +241,7 @@
   <div class="topbar">
     <button class="mini-btn" id="teaBack">‹ もどる</button>
     <span class="who">せんせい がめん</span>
+    <span style="font-size:13px;font-weight:700;color:#2f8f4e;background:#e7f6ec;padding:2px 8px;border-radius:999px;">v9</span>
     <span class="room" id="teaRoom"></span>
     <span class="spacer"></span>
     <span class="dot" id="teaDot"></span>
@@ -255,6 +259,9 @@
     <div class="gallery-tools">
       <span class="count" id="galCount">0まい</span>
       <span class="spacer" style="flex:1"></span>
+      <button class="mini-btn" id="saveSelBtn" style="display:none">💾 えらんだ0まいを ほぞん</button>
+      <button class="mini-btn" id="selectBtn">☑️ えらんで ほぞん</button>
+      <button class="mini-btn" id="saveAllBtn">⬇️ ぜんぶ ほぞん</button>
       <button class="mini-btn" id="presentBtn">📺 みんなにみせる</button>
       <button class="mini-btn" id="clearAllBtn">🗑️ ぜんぶけす</button>
       <button class="mini-btn" id="reloadGal">🔄 さいよみこみ</button>
@@ -830,9 +837,10 @@ async function loadGallery(){
   galleryGrid.innerHTML='';
   galleryData.forEach(d=>{
     const wrap=document.createElement('div'); wrap.className='tile';
+    if(selectMode && selected.has(d.id)) wrap.classList.add('selected');
     const th=document.createElement('div'); th.className='thumb';
     const img=document.createElement('img'); img.src=d.image; img.alt=d.name||'';
-    img.onclick=()=>openModal(d.image,d.name);
+    img.onclick=()=>{ if(selectMode){ toggleSelect(d,wrap); } else { openModal(d.image,d.name); } };
     th.appendChild(img);
     const del=document.createElement('button'); del.className='del'; del.textContent='🗑️ けす';
     del.onclick=e=>{ e.stopPropagation(); deleteOne(d); };
@@ -841,6 +849,83 @@ async function loadGallery(){
   });
 }
 document.getElementById('reloadGal').onclick=loadGallery;
+
+// ===== ギャラリーの保存（パソコン向け：ZIPでまとめてダウンロード）=====
+let selectMode=false;
+const selected=new Set();            // 選んだ絵のid
+const selectBtn=document.getElementById('selectBtn');
+const saveSelBtn=document.getElementById('saveSelBtn');
+const saveAllBtn=document.getElementById('saveAllBtn');
+
+function toggleSelect(d,wrap){
+  if(selected.has(d.id)){ selected.delete(d.id); wrap.classList.remove('selected'); }
+  else { selected.add(d.id); wrap.classList.add('selected'); }
+  updateSaveSelBtn();
+}
+function updateSaveSelBtn(){ saveSelBtn.textContent='💾 えらんだ'+selected.size+'まいを ほぞん'; }
+selectBtn.onclick=()=>{
+  selectMode=!selectMode;
+  selected.clear();
+  galleryGrid.classList.toggle('selecting',selectMode);
+  galleryGrid.querySelectorAll('.tile.selected').forEach(t=>t.classList.remove('selected'));
+  selectBtn.textContent = selectMode ? '✖ せんたく やめる' : '☑️ えらんで ほぞん';
+  saveSelBtn.style.display = selectMode ? '' : 'none';
+  updateSaveSelBtn();
+};
+saveSelBtn.onclick=()=>{
+  const list=galleryData.filter(d=>selected.has(d.id));
+  if(!list.length){ alert('ほぞんする えを えらんでください。\n（えを タップすると えらべます）'); return; }
+  saveAsZip(list, saveSelBtn);
+};
+saveAllBtn.onclick=()=>{
+  if(!galleryData.length){ alert('ほぞんする えが ありません。'); return; }
+  saveAsZip(galleryData, saveAllBtn);
+};
+
+// JSZip（ZIP作成ライブラリ）を必要になったときだけ読み込む
+function ensureJSZip(){
+  return new Promise((res,rej)=>{
+    if(window.JSZip) return res(window.JSZip);
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+    s.onload=()=>res(window.JSZip);
+    s.onerror=()=>rej(new Error('load failed'));
+    document.head.appendChild(s);
+  });
+}
+// ファイル名に使えない文字を置きかえる
+function cleanName(nm){ return (nm||'なまえなし').replace(/[\\/:*?"<>|]/g,'_').trim()||'なまえなし'; }
+async function saveAsZip(list, btn){
+  const label=btn.textContent;
+  btn.disabled=true; btn.textContent='ほぞん じゅんびちゅう…';
+  try{
+    const JSZip=await ensureJSZip();
+    const zip=new JSZip();
+    // 名前ごとの枚数を先に数える（1枚なら番号なし「名前.png」、複数なら「名前_1.png」…）
+    const counts={};
+    list.forEach(d=>{ const n=cleanName(d.name); counts[n]=(counts[n]||0)+1; });
+    const used={};
+    list.forEach(d=>{
+      const n=cleanName(d.name);
+      let fname;
+      if(counts[n]===1){ fname=n+'.png'; }
+      else { used[n]=(used[n]||0)+1; fname=n+'_'+used[n]+'.png'; }
+      const b64=(d.image||'').split(',')[1];
+      if(b64) zip.file(fname, b64, {base64:true});
+    });
+    const blob=await zip.generateAsync({type:'blob'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download='おえかき_'+(state.room||'gallery')+'.zip';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+  }catch(err){
+    alert('ほぞんできませんでした。\nネットにつながっているか ためしてください。\n('+(err.message||err)+')');
+  }finally{
+    btn.disabled=false; btn.textContent=label;
+    if(btn===saveSelBtn) updateSaveSelBtn();
+  }
+}
 
 // 1枚けす・ぜんぶけす（もとに戻せないので確認します）
 async function deleteOne(d){
